@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Building2, ChevronRight, Globe2, LockKeyhole, LogOut, Search, ShieldCheck, Users, X } from "lucide-react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import type { Job, Role, ApplicationStatus } from "./lib/types";
@@ -128,19 +128,29 @@ function App() {
     </main>
     <footer><a className="brand footer-brand" href="#"><span className="brand-mark"><Building2 size={20}/></span><span><b>Rift Valley Hotel</b><small>ADAMA · ETHIOPIA</small></span></a><span>© {new Date().getFullYear()} Rift Valley Hotel. Recruitment portal.</span><button className="footer-link" onClick={() => setAdminOpen(true)}>{t.admin}</button></footer>
     {selectedJob && <div className="modal-backdrop" onClick={() => setSelectedJob(null)}><div className="modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setSelectedJob(null)}><X/></button><div className="eyebrow green">{selectedJob.department || "Career opportunity"}</div><h2>{lang === "am" && selectedJob.title_am ? selectedJob.title_am : selectedJob.title}</h2><p className="job-location">{selectedJob.location} · {selectedJob.employment_type}</p><h3>{t.description}</h3><p className="preserve">{lang === "am" && selectedJob.description_am ? selectedJob.description_am : selectedJob.description}</p><h3>{t.requirements}</h3><p className="preserve">{lang === "am" && selectedJob.requirements_am ? selectedJob.requirements_am : selectedJob.requirements || "Please review the job description."}</p><button className="primary-btn" onClick={() => { setApplicationJob(selectedJob); setSelectedJob(null); }}>{t.apply}<ChevronRight size={16}/></button></div></div>}
-    {applicationJob && <ApplicationForm job={applicationJob} lang={lang} t={t} onClose={() => setApplicationJob(null)} onSuccess={ref => { setReference(ref); setApplicationJob(null); }} />}
-    {reference && <div className="modal-backdrop"><div className="modal success-modal"><div className="success-mark">✓</div><h2>{t.success}</h2><p>{t.successText}</p><div className="reference">{reference}</div><button className="primary-btn" onClick={() => setReference("")}>{t.close}</button></div></div>}
+    {applicationJob && <ApplicationForm job={applicationJob} t={t} onClose={() => setApplicationJob(null)} onSuccess={ref => { setReference(ref); setApplicationJob(null); }} />}  {reference && <div className="modal-backdrop"><div className="modal success-modal"><div className="success-mark">✓</div><h2>{t.success}</h2><p>{t.successText}</p><div className="reference">{reference}</div><button className="primary-btn" onClick={() => setReference("")}>{t.close}</button></div></div>}
     {error && <div className="toast" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
   </div>;
 }
 
-function ApplicationForm({ job, lang, t, onClose, onSuccess }: { job: Job; lang: Lang; t: any; onClose: () => void; onSuccess: (ref: string) => void }) {
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", city: "", education: "", experience: "", skills: "", cover_letter: "" });
+function ApplicationForm({ job, t, onClose, onSuccess }: { job: Job; t: any; onClose: () => void; onSuccess: (ref: string) => void }) {
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: "",
+    city: "",
+    education: "",
+    experience: "",
+    skills: "",
+    cover_letter: ""
+  });
   const [cv, setCv] = useState<File | null>(null);
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+
   const set = (k: keyof typeof form, v: string) => setForm(old => ({ ...old, [k]: v }));
+
   async function submit(e: React.FormEvent) {
     e.preventDefault(); setError("");
     if (!form.full_name.trim() || !form.email.trim() || !form.phone.trim() || !form.city.trim() || !form.education.trim() || !cv || !consent) { setError(t.required); return; }
@@ -150,7 +160,7 @@ function ApplicationForm({ job, lang, t, onClose, onSuccess }: { job: Job; lang:
     setBusy(true);
     try {
       const body = new FormData();
-      Object.entries(form).forEach(([k, v]) => body.append(k, v));
+      Object.entries(form).forEach(([k, v]) => body.append(k, v as string));
       body.append("job_id", job.id);
       body.append("cv", cv);
       body.append("consent", "true");
@@ -162,6 +172,7 @@ function ApplicationForm({ job, lang, t, onClose, onSuccess }: { job: Job; lang:
     } catch (err: any) { setError(err.message || "Could not submit. Please try again."); }
     finally { setBusy(false); }
   }
+
   return <div className="modal-backdrop" onClick={onClose}><div className="modal application-modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={onClose}><X/></button><div className="eyebrow green">{t.formTitle}</div><h2>{job.title}</h2><p className="muted">{t.allFields}</p><form onSubmit={submit} className="form-grid">
     <label>{t.fullName} *<input autoComplete="name" required value={form.full_name} onChange={e => set("full_name", e.target.value)} maxLength={120}/></label>
     <label>{t.email} *<input type="email" autoComplete="email" required value={form.email} onChange={e => set("email", e.target.value)} maxLength={254}/></label>
