@@ -152,9 +152,8 @@ function ApplicationForm({ job, t, onClose, onSuccess }: { job: Job; t: any; onC
   const set = (k: keyof typeof form, v: string) => setForm(old => ({ ...old, [k]: v }));
 
   async function submit(e: React.FormEvent) {
-    e.preventDefault(); setError("");
-    if (!form.full_name.trim() || !form.email.trim() || !form.phone.trim() || !form.city.trim() || !form.education.trim() || !cv || !consent) { setError(t.required); return; }
-    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+   e.preventDefault(); setError("");
+if (!form.full_name.trim() || !form.phone.trim() || !form.city.trim() || !form.education.trim() || !cv || !consent) { setError(t.required); return; }    const allowed = ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
     if (!allowed.includes(cv.type) || cv.size > 5 * 1024 * 1024) { setError("Upload a PDF or DOCX file no larger than 5 MB."); return; }
     if (!supabaseConfigured) { setError("Supabase is not configured. Follow README setup instructions."); return; }
     setBusy(true);
@@ -175,8 +174,7 @@ function ApplicationForm({ job, t, onClose, onSuccess }: { job: Job; t: any; onC
 
   return <div className="modal-backdrop" onClick={onClose}><div className="modal application-modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={onClose}><X/></button><div className="eyebrow green">{t.formTitle}</div><h2>{job.title}</h2><p className="muted">{t.allFields}</p><form onSubmit={submit} className="form-grid">
     <label>{t.fullName} *<input autoComplete="name" required value={form.full_name} onChange={e => set("full_name", e.target.value)} maxLength={120}/></label>
-    <label>{t.email} *<input type="email" autoComplete="email" required value={form.email} onChange={e => set("email", e.target.value)} maxLength={254}/></label>
-    <label>{t.phone} *<input type="tel" autoComplete="tel" required placeholder="+251…" value={form.phone} onChange={e => set("phone", e.target.value)} maxLength={30}/></label>
+    <label>{t.email}<input type="email" autoComplete="email" value={form.email} onChange={e => set("email", e.target.value)} maxLength={254}/></label> <label>{t.phone} *<input type="tel" autoComplete="tel" required placeholder="+251…" value={form.phone} onChange={e => set("phone", e.target.value)} maxLength={30}/></label>
     <label>{t.city} *<input required value={form.city} onChange={e => set("city", e.target.value)} maxLength={100}/></label>
     <label className="full">{t.education} *<input required value={form.education} onChange={e => set("education", e.target.value)} maxLength={200}/></label>
     <label className="full">{t.experience}<textarea rows={2} value={form.experience} onChange={e => set("experience", e.target.value)} maxLength={3000}/></label>
