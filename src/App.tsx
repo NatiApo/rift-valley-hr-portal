@@ -1,5 +1,5 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, Building2, ChevronRight, Globe2, LockKeyhole, LogOut, Search, ShieldCheck, Users, X } from "lucide-react";
+import { BriefcaseBusiness, Building2, ChevronRight, Eye, FileDown, Globe2, LockKeyhole, LogOut, Search, ShieldCheck, Users, X } from "lucide-react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import type { Job, Role, ApplicationStatus } from "./lib/types";
 import { statusLabels } from "./lib/types";
@@ -7,7 +7,9 @@ import { statusLabels } from "./lib/types";
 type Lang = "en" | "am";
 type Profile = { id: string; full_name: string; role: Role; active: boolean };
 type ApplicationRow = {
-  id: string; reference_code: string; full_name: string; email: string; phone: string;
+  id: string; reference_code: string; full_name: string; email: string | null; phone: string;
+  city: string | null; education: string | null; experience: string | null;
+  skills: string | null; cover_letter: string | null;
   status: ApplicationStatus; created_at: string; job_id: string; cv_path: string | null;
   jobs?: { title: string } | null;
 };
@@ -203,6 +205,7 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
   const [tab, setTab] = useState<"applications" | "jobs" | "staff">("applications");
   const [apps, setApps] = useState<ApplicationRow[]>([]);
+  const [selectedApplicant, setSelectedApplicant] = useState<ApplicationRow | null>(null);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -217,7 +220,7 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
   async function refresh() {
     if (!session?.user || !profile?.active) return;
     const [a, j] = await Promise.all([
-      supabase.from("applications").select("id,reference_code,full_name,email,phone,status,created_at,job_id,cv_path,jobs(title)").order("created_at", { ascending: false }).limit(500),
+      supabase.from("applications").select("id,reference_code,full_name,email,phone,city,education,experience,skills,cover_letter,status,created_at,job_id,cv_path,jobs(title)").order("created_at", { ascending: false }).limit(500),
       supabase.from("jobs").select("*").order("created_at", { ascending: false })
     ]);
     if (a.error) onError(a.error.message);
@@ -276,6 +279,48 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
     if (error || !data?.url) return onError(error?.message || data?.error || "Could not create CV link.");
     window.open(data.url, "_blank", "noopener,noreferrer");
   }
+  function saveApplicantPdf(applicant: ApplicationRow) {
+    const escapeHtml = (value: string | null | undefined) => String(value || "Not provided")
+      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    const printWindow = window.open("", "_blank", "width=900,height=700");
+    if (!printWindow) {
+      onError("Please allow pop-ups for this site, then try Save as PDF again.");
+      return;
+    }
+    const rows = [
+      ["Full name", applicant.full_name],
+      ["Reference number", applicant.reference_code],
+      ["Applied position", applicant.jobs?.title || "—"],
+      ["Application date", new Date(applicant.created_at).toLocaleString()],
+      ["Recruitment status", statusLabels[applicant.status]],
+      ["Email address", applicant.email],
+      ["Phone number", applicant.phone],
+      ["City / town", applicant.city],
+      ["Education", applicant.education],
+      ["Relevant experience", applicant.experience],
+      ["Skills", applicant.skills],
+      ["Why interested in this role", applicant.cover_letter]
+    ];
+    printWindow.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Candidate - ${escapeHtml(applicant.full_name)}</title><style>
+      *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#1e293b;margin:0;padding:36px;line-height:1.5}
+      header{border-bottom:3px solid #17634d;padding-bottom:18px;margin-bottom:24px}
+      .brand{font-size:12px;letter-spacing:2px;color:#17634d;font-weight:700}
+      h1{font-size:26px;margin:8px 0 2px;color:#123d32}.sub{color:#64748b;font-size:12px}
+      h2{font-size:15px;color:#17634d;margin:24px 0 10px}
+      .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+      .item{border:1px solid #dbe4df;border-radius:8px;padding:11px;break-inside:avoid}
+      .label{font-size:10px;text-transform:uppercase;letter-spacing:1px;color:#64748b;font-weight:700}
+      .value{font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:4px}
+      .wide{grid-column:1/-1}footer{margin-top:30px;padding-top:12px;border-top:1px solid #dbe4df;color:#64748b;font-size:10px}
+      @media print{body{padding:0}.item{break-inside:avoid}}
+    </style></head><body><header><div class="brand">RIFT VALLEY HOTEL · ADAMA, ETHIOPIA</div><h1>Candidate Profile</h1><div class="sub">Confidential recruitment record · ${escapeHtml(applicant.reference_code)}</div></header>
+    <div class="grid">${rows.map(([label,value],index) => `<section class="item ${index >= 9 ? "wide" : ""}"><div class="label">${escapeHtml(label)}</div><div class="value">${escapeHtml(value)}</div></section>`).join("")}</div>
+    <footer>Confidential. For authorized recruitment use only. Generated by Rift Valley Hotel HR Recruitment Portal.</footer>
+    <script>window.onload=()=>{window.focus();window.print();};</script></body></html>`);
+    printWindow.document.close();
+  }
+
   async function saveJob(e: React.FormEvent) {
     e.preventDefault(); setBusy(true);
     const { error } = await supabase.functions.invoke("hr-manage", { body: { action: "save_job", job: { ...jobForm, deadline: jobForm.deadline || null } } });
@@ -308,7 +353,21 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
     <div className="admin-body"><aside className="sidebar"><div className="side-label">WORKSPACE</div><button className={tab === "applications" ? "side-item active" : "side-item"} onClick={() => setTab("applications")}><Users size={18}/>{t.candidates}<span>{apps.length}</span></button><button className={tab === "jobs" ? "side-item active" : "side-item"} onClick={() => setTab("jobs")}><BriefcaseBusiness size={18}/>{t.jobs}</button>{isAdmin && <button className={tab === "staff" ? "side-item active" : "side-item"} onClick={() => setTab("staff")}><ShieldCheck size={18}/>{t.staff}</button>}<div className="sidebar-foot"><ShieldCheck size={16}/> Role-based access enabled</div></aside>
     <section className="admin-content"><div className="page-heading"><div><div className="eyebrow green">RECRUITMENT OPERATIONS</div><h1>{t.dashboard}</h1><p>Welcome back, {profile.full_name}.</p></div><span className="role-pill">{profile.role}</span></div>
       {tab === "applications" && <><div className="stats"><div className="stat-card"><span>{t.total}</span><b>{apps.length}</b><small>All received</small></div><div className="stat-card"><span>Under review</span><b>{apps.filter(a => a.status === "under_review").length}</b><small>In progress</small></div><div className="stat-card"><span>Shortlisted</span><b>{apps.filter(a => a.status === "shortlisted").length}</b><small>Next-stage candidates</small></div><div className="stat-card"><span>Open vacancies</span><b>{jobs.filter(j => j.status === "published").length}</b><small>Published jobs</small></div></div>
-        <div className="table-panel"><div className="table-toolbar"><div><h2>{t.candidates}</h2><p>Review and update applicant records.</p></div><div className="toolbar-actions"><div className="searchbox compact"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search candidates"/></div>{isAdmin && <button className="outline-btn" onClick={exportCsv}>Export CSV</button>}</div></div><div className="filter-row"><label>{t.filter}<select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{t.all}</option>{Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></label><span>{filtered.length} records</span></div><div className="table-scroll"><table><thead><tr><th>{t.applicant}</th><th>{t.position}</th><th>{t.received}</th><th>{t.status}</th><th>{t.actions}</th></tr></thead><tbody>{filtered.map(a => <tr key={a.id}><td><b>{a.full_name}</b><small>{a.email}</small><small>{a.phone}</small><small className="ref-code">{a.reference_code}</small></td><td>{a.jobs?.title || "—"}</td><td>{new Date(a.created_at).toLocaleDateString()}</td><td><span className={`status status-${a.status}`}>{statusLabels[a.status]}</span></td><td><div className="row-actions"><button className="outline-btn mini" disabled={profile.role === "reviewer"} onClick={() => getCv(a.cv_path)}>CV</button>{canRecruit && <select aria-label="Change application status" value={a.status} onChange={e => changeStatus(a.id, e.target.value as ApplicationStatus)}>{Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select>}</div></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">{t.noApplications}</div>}</div></div></>}
+        <div className="table-panel"><div className="table-toolbar"><div><h2>{t.candidates}</h2><p>Review and update applicant records.</p></div><div className="toolbar-actions"><div className="searchbox compact"><Search size={16}/><input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search candidates"/></div>{isAdmin && <button className="outline-btn" onClick={exportCsv}>Export CSV</button>}</div></div><div className="filter-row"><label>{t.filter}<select value={filter} onChange={e => setFilter(e.target.value)}><option value="all">{t.all}</option>{Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select></label><span>{filtered.length} records</span></div><div className="table-scroll"><table><thead><tr><th>{t.applicant}</th><th>{t.position}</th><th>{t.received}</th><th>{t.status}</th><th>{t.actions}</th></tr></thead><tbody>{filtered.map(a => <tr key={a.id}><td><b>{a.full_name}</b><small>{a.email}</small><small>{a.phone}</small><small className="ref-code">{a.reference_code}</small></td><td>{a.jobs?.title || "—"}</td><td>{new Date(a.created_at).toLocaleDateString()}</td><td><span className={`status status-${a.status}`}>{statusLabels[a.status]}</span></td><td><div className="row-actions"><button className="outline-btn mini" onClick={() => setSelectedApplicant(a)}><Eye size={14}/> View</button>{canRecruit && <select aria-label="Change application status" value={a.status} onChange={e => changeStatus(a.id, e.target.value as ApplicationStatus)}>{Object.entries(statusLabels).map(([v,l]) => <option key={v} value={v}>{l}</option>)}</select>}</div></td></tr>)}</tbody></table>{filtered.length === 0 && <div className="empty">{t.noApplications}</div>}</div></div></>}
+      {selectedApplicant && <div className="modal-backdrop" onClick={() => setSelectedApplicant(null)}><div className="modal applicant-profile-modal" onClick={e => e.stopPropagation()} style={{maxWidth: "850px", width: "min(850px, 94vw)", maxHeight: "90vh", overflowY: "auto"}}><button className="modal-close" onClick={() => setSelectedApplicant(null)} aria-label="Close"><X/></button>
+        <div className="eyebrow green">CONFIDENTIAL CANDIDATE RECORD</div><h2 style={{marginBottom: "6px"}}>{selectedApplicant.full_name}</h2><p className="muted" style={{marginTop: 0}}>Reference: {selectedApplicant.reference_code} · Applied {new Date(selectedApplicant.created_at).toLocaleDateString()}</p>
+        <div className="stats" style={{gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))", margin: "18px 0"}}><div className="stat-card"><span>Position</span><b style={{fontSize: "16px"}}>{selectedApplicant.jobs?.title || "—"}</b></div><div className="stat-card"><span>Application status</span><b style={{fontSize: "16px"}}>{statusLabels[selectedApplicant.status]}</b></div><div className="stat-card"><span>Application date</span><b style={{fontSize: "16px"}}>{new Date(selectedApplicant.created_at).toLocaleDateString()}</b></div></div>
+        <div className="form-grid" style={{marginTop: "18px"}}>
+          {([["Email address", selectedApplicant.email],["Phone number", selectedApplicant.phone],["City / town", selectedApplicant.city],["Education", selectedApplicant.education]] as [string,string|null][]).map(([label,value]) => <div key={label}><small className="muted">{label}</small><p style={{marginTop: "4px",overflowWrap: "anywhere"}}>{value || "Not provided"}</p></div>)}
+          <div className="full"><small className="muted">Relevant experience</small><p className="preserve">{selectedApplicant.experience || "Not provided"}</p></div>
+          <div className="full"><small className="muted">Skills</small><p className="preserve">{selectedApplicant.skills || "Not provided"}</p></div>
+          <div className="full"><small className="muted">Why interested in this role</small><p className="preserve">{selectedApplicant.cover_letter || "Not provided"}</p></div>
+        </div>
+        <div className="form-actions" style={{justifyContent: "space-between", flexWrap: "wrap", marginTop: "22px"}}>
+          <button className="outline-btn" disabled={profile.role === "reviewer" || !selectedApplicant.cv_path} onClick={() => getCv(selectedApplicant.cv_path)}>View attached CV</button>
+          <div style={{display: "flex", gap: "10px", flexWrap: "wrap"}}><button className="outline-btn" onClick={() => saveApplicantPdf(selectedApplicant)}><FileDown size={16}/> Save as PDF</button><button className="primary-btn" onClick={() => setSelectedApplicant(null)}>Close profile</button></div>
+        </div>
+      </div></div>}
       {tab === "jobs" && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.jobs}</h2><p>Create, publish, or close recruitment opportunities.</p></div>{canRecruit && <button className="primary-btn" onClick={() => setShowJobForm(!showJobForm)}>{t.addJob}</button>}</div>{showJobForm && <form className="job-editor" onSubmit={saveJob}><div className="form-grid"><label>{t.title} <input required value={jobForm.title} onChange={e => setJobForm({...jobForm,title:e.target.value})}/></label><label>የሥራ ርዕስ (Amharic)<input value={jobForm.title_am} onChange={e => setJobForm({...jobForm,title_am:e.target.value})}/></label><label>{t.dept}<input value={jobForm.department} onChange={e => setJobForm({...jobForm,department:e.target.value})}/></label><label>{t.location}<input required value={jobForm.location} onChange={e => setJobForm({...jobForm,location:e.target.value})}/></label><label>{t.type}<select value={jobForm.employment_type} onChange={e => setJobForm({...jobForm,employment_type:e.target.value})}><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Temporary</option><option>Internship</option></select></label><label>{t.deadline}<input type="date" value={jobForm.deadline} onChange={e => setJobForm({...jobForm,deadline:e.target.value})}/></label><label className="full">{t.description} <textarea required rows={4} value={jobForm.description} onChange={e => setJobForm({...jobForm,description:e.target.value})}/></label><label className="full">የሥራ መግለጫ (Amharic)<textarea rows={3} value={jobForm.description_am} onChange={e => setJobForm({...jobForm,description_am:e.target.value})}/></label><label className="full">{t.requirements}<textarea rows={3} value={jobForm.requirements} onChange={e => setJobForm({...jobForm,requirements:e.target.value})}/></label><label className="full">መስፈርቶች (Amharic)<textarea rows={3} value={jobForm.requirements_am} onChange={e => setJobForm({...jobForm,requirements_am:e.target.value})}/></label></div><div className="form-actions"><button type="button" className="outline-btn" onClick={() => setShowJobForm(false)}>{t.cancel}</button><button disabled={busy} className="primary-btn">{busy ? "Saving…" : t.publish}</button></div></form>}<div className="job-admin-list">{jobs.map(j => <div className="job-admin-row" key={j.id}><div><b>{j.title}</b><small>{j.department || "General"} · {j.location}</small></div><span className={`status ${j.status === "published" ? "status-hired" : "status-new"}`}>{j.status}</span>{canRecruit && j.status !== "closed" && <button className="outline-btn mini" onClick={() => closeJob(j.id)}>{t.closeJob}</button>}</div>)}</div></div>}
       {tab === "staff" && isAdmin && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.staff}</h2><p>Invite staff and assign the minimum permissions they need.</p></div></div><form className="staff-form" onSubmit={inviteStaff}><label>{t.staffName}<input required value={staffForm.full_name} onChange={e => setStaffForm({...staffForm,full_name:e.target.value})}/></label><label>{t.staffEmail}<input required type="email" value={staffForm.email} onChange={e => setStaffForm({...staffForm,email:e.target.value})}/></label><label>{t.role}<select value={staffForm.role} onChange={e => setStaffForm({...staffForm,role:e.target.value as Role})}><option value="reviewer">{t.roleReviewer}</option><option value="recruiter">{t.roleRecruiter}</option><option value="admin">{t.roleAdmin}</option></select></label><button className="primary-btn" disabled={busy}>{t.createStaff}</button></form><div className="job-admin-list">{staff.map(s => <div className="job-admin-row" key={s.id}><div><b>{s.full_name}</b><small>{s.id}</small></div><span className="status status-new">{s.role}</span><span className={s.active ? "active-label" : "inactive-label"}>{s.active ? "Active" : "Disabled"}</span></div>)}</div><p className="muted">{t.adminOnly}</p></div>}
     </section></div>
