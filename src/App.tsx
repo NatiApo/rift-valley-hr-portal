@@ -123,7 +123,7 @@ function App() {
   src="https://i.ibb.co/mVpWYZv9/photo-2026-10-29-16-41-18.jpg"
   alt="Rift Valley Hotel logo"
 /><span><b>Rift Valley Hotel</b><small>ADAMA · ETHIOPIA</small></span></a>
-      <nav><a href="#vacancies">{t.nav}</a><button className="language" onClick={() => setLang(lang === "en" ? "am" : "en")}><Globe2 size={16}/>{lang === "en" ? "አማርኛ" : "English"}</button><button className="outline-btn" onClick={() => setAdminOpen(true)}><LockKeyhole size={16}/>{t.login}</button></nav>
+      <nav><a href="#vacancies">{t.nav}</a><button className="language" onClick={() => setLang(lang === "en" ? "am" : "en")}><Globe2 size={16}/>{lang === "en" ? "አማርኛ" : "English"}</button></nav>
     </header>
     <main>
       <section className="hero"><div className="hero-overlay"></div><div className="hero-content"><div className="eyebrow"><span></span>{t.security}</div><h1>{t.intro}</h1><p>{t.sub}</p><a className="primary-btn" href="#vacancies">{t.openRoles}<ChevronRight size={17}/></a></div><div className="hero-foot"><span><ShieldCheck size={16}/>{t.publicPrivacy}</span><span>RIFT VALLEY HOTEL · CAREERS</span></div></section>
