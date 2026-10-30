@@ -81,7 +81,7 @@ function App() {
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [applicationJob, setApplicationJob] = useState<Job | null>(null);
   const [reference, setReference] = useState("");
-  const [adminOpen, setAdminOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(() => window.location.pathname === "/hr");
   const [recoveryMode, setRecoveryMode] = useState(false);
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -136,7 +136,7 @@ function App() {
   className="hotel-logo"
   src="https://i.ibb.co/mVpWYZv9/photo-2026-10-29-16-41-18.jpg"
   alt="Rift Valley Hotel logo"
-/><span><b>Rift Valley Hotel</b><small>ADAMA · ETHIOPIA</small></span></a><span>© {new Date().getFullYear()} Rift Valley Hotel. Recruitment portal.</span><button className="footer-link" onClick={() => setAdminOpen(true)}>{t.admin}</button></footer>
+/><span><b>Rift Valley Hotel</b><small>ADAMA · ETHIOPIA</small></span></a><span>© {new Date().getFullYear()} Rift Valley Hotel. Recruitment portal.</span></footer>
     {selectedJob && <div className="modal-backdrop" onClick={() => setSelectedJob(null)}><div className="modal" onClick={e => e.stopPropagation()}><button className="modal-close" onClick={() => setSelectedJob(null)}><X/></button><div className="eyebrow green">{selectedJob.department || "Career opportunity"}</div><h2>{lang === "am" && selectedJob.title_am ? selectedJob.title_am : selectedJob.title}</h2><p className="job-location">{selectedJob.location} · {selectedJob.employment_type}</p><h3>{t.description}</h3><p className="preserve">{lang === "am" && selectedJob.description_am ? selectedJob.description_am : selectedJob.description}</p><h3>{t.requirements}</h3><p className="preserve">{lang === "am" && selectedJob.requirements_am ? selectedJob.requirements_am : selectedJob.requirements || "Please review the job description."}</p><button className="primary-btn" onClick={() => { setApplicationJob(selectedJob); setSelectedJob(null); }}>{t.apply}<ChevronRight size={16}/></button></div></div>}
     {applicationJob && <ApplicationForm job={applicationJob} t={t} onClose={() => setApplicationJob(null)} onSuccess={ref => { setReference(ref); setApplicationJob(null); }} />}  {reference && <div className="modal-backdrop"><div className="modal success-modal"><div className="success-mark">✓</div><h2>{t.success}</h2><p>{t.successText}</p><div className="reference">{reference}</div><button className="primary-btn" onClick={() => setReference("")}>{t.close}</button></div></div>}
     {error && <div className="toast" role="alert">{error}<button onClick={() => setError("")}>×</button></div>}
