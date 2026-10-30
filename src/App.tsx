@@ -116,7 +116,11 @@ function App() {
 
   if (adminOpen) return <Admin onBack={() => { setAdminOpen(false); setError(""); setRecoveryMode(false); }} session={session} profile={profile} onError={setError} lang={lang} recoveryMode={recoveryMode} onRecoveryComplete={() => setRecoveryMode(false)} />;
   return <div className="app-shell">
-    <header className="topbar"><a className="brand" href="#" onClick={e => { e.preventDefault(); setSelectedJob(null); }}><span className="brand-mark"><Building2 size={23}/></span><span><b>Rift Valley Hotel</b><small>ADAMA · ETHIOPIA</small></span></a>
+    <header className="topbar"><a className="brand" href="#" onClick={e => { e.preventDefault(); setSelectedJob(null); }}><img
+  className="hotel-logo"
+  src="https://i.ibb.co/mVpWYZv9/photo-2026-10-29-16-41-18.jpg"
+  alt="Rift Valley Hotel logo"
+/><span><b>Rift Valley Hotel</b><small>ADAMA · ETHIOPIA</small></span></a>
       <nav><a href="#vacancies">{t.nav}</a><button className="language" onClick={() => setLang(lang === "en" ? "am" : "en")}><Globe2 size={16}/>{lang === "en" ? "አማርኛ" : "English"}</button><button className="outline-btn" onClick={() => setAdminOpen(true)}><LockKeyhole size={16}/>{t.login}</button></nav>
     </header>
     <main>
