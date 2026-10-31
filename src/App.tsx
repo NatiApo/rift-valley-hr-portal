@@ -1,4 +1,5 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import DepartmentPortal from "./DepartmentPortal";
+import { useEffect, useMemo, useState } from "react";
 import { BriefcaseBusiness, Building2, ChevronRight, Eye, FileDown, Globe2, LockKeyhole, LogOut, Search, ShieldCheck, Users, X } from "lucide-react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import type { Job, Role, ApplicationStatus } from "./lib/types";
@@ -116,6 +117,9 @@ function App() {
   }, []);
   const visibleJobs = useMemo(() => jobs.filter(j => `${j.title} ${j.department || ""} ${j.description}`.toLowerCase().includes(query.toLowerCase())), [jobs, query]);
 
+ if (window.location.pathname === "/department") {
+  return <DepartmentPortal />;
+}
   if (adminOpen) return <Admin onBack={() => { setAdminOpen(false); setError(""); setRecoveryMode(false); }} session={session} profile={profile} onError={setError} lang={lang} recoveryMode={recoveryMode} onRecoveryComplete={() => setRecoveryMode(false)} />;
   return <div className="app-shell">
     <header className="topbar"><a className="brand" href="#" onClick={e => { e.preventDefault(); setSelectedJob(null); }}><img
