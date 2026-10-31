@@ -120,6 +120,9 @@ function App() {
  if (window.location.pathname === "/department") {
   return <DepartmentPortal />;
 }
+if (window.location.pathname === "/department") {
+  return <DepartmentPortal />;
+}
   if (adminOpen) return <Admin onBack={() => { setAdminOpen(false); setError(""); setRecoveryMode(false); }} session={session} profile={profile} onError={setError} lang={lang} recoveryMode={recoveryMode} onRecoveryComplete={() => setRecoveryMode(false)} />;
   return <div className="app-shell">
     <header className="topbar"><a className="brand" href="#" onClick={e => { e.preventDefault(); setSelectedJob(null); }}><img
