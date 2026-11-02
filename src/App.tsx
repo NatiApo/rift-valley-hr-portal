@@ -1,6 +1,7 @@
 ﻿import DepartmentPortal from "./DepartmentPortal";
+import RequestChatModal from "./components/RequestChatModal";
 import { useEffect, useMemo, useState } from "react";
-import { BriefcaseBusiness, Building2, ChevronRight, Eye, FileDown, Globe2, LockKeyhole, LogOut, Search, ShieldCheck, Users, X } from "lucide-react";
+import { BriefcaseBusiness, Building2, ChevronRight, Eye, FileDown, Globe2, LockKeyhole, LogOut, MessageSquare, Search, ShieldCheck, Users, X } from "lucide-react";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 import type { Job, Role, ApplicationStatus } from "./lib/types";
 import { statusLabels } from "./lib/types";
@@ -224,7 +225,7 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
- const [tab, setTab] = useState<"applications" | "jobs" | "staff" | "department" | "departments">("applications");
+  const [tab, setTab] = useState<"applications" | "jobs" | "staff" | "department" | "departments">("applications");
   const [selectedApplicant, setSelectedApplicant] = useState<ApplicationRow | null>(null);
   const [apps, setApps] = useState<ApplicationRow[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -235,64 +236,65 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
   const [jobForm, setJobForm] = useState({ title: "", title_am: "", department: "", location: "Adama, Ethiopia", employment_type: "Full-time", description: "", description_am: "", requirements: "", requirements_am: "", deadline: "" });
   const [staffForm, setStaffForm] = useState({ email: "", full_name: "", role: "reviewer" as Role });
   const [managerForm, setManagerForm] = useState({
-  username: "",
-  full_name: "",
-  department: "Kitchen",
-  temporary_password: "",
-});
+    username: "",
+    full_name: "",
+    department: "Kitchen",
+    temporary_password: "",
+  });
 
-
-const [createdManager, setCreatedManager] = useState<any>(null);
+  const [createdManager, setCreatedManager] = useState<any>(null);
   const [staff, setStaff] = useState<Profile[]>([]);
   const [departmentRequests, setDepartmentRequests] = useState<DepartmentRequest[]>([]);
-const [loadingDepartmentRequests, setLoadingDepartmentRequests] = useState(false);
+  const [loadingDepartmentRequests, setLoadingDepartmentRequests] = useState(false);
+  const [activeChatRequest, setActiveChatRequest] = useState<DepartmentRequest | null>(null);
+
   const canRecruit = profile?.active && (profile.role === "admin" || profile.role === "recruiter");
   const isAdmin = profile?.active && profile.role === "admin";
 
-async function createDepartmentManager(e: React.FormEvent) {
-  e.preventDefault();
-  onError("");
+  async function createDepartmentManager(e: React.FormEvent) {
+    e.preventDefault();
+    onError("");
 
-  if (managerForm.temporary_password.length < 12) {
-    onError("Temporary password must contain at least 12 characters.");
-    return;
+    if (managerForm.temporary_password.length < 12) {
+      onError("Temporary password must contain at least 12 characters.");
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "department-manage",
+        {
+          body: {
+            action: "create_manager",
+            username: managerForm.username,
+            full_name: managerForm.full_name,
+            department: managerForm.department,
+            temporary_password: managerForm.temporary_password,
+          },
+        }
+      );
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setCreatedManager(data.manager);
+
+      setManagerForm({
+        username: "",
+        full_name: "",
+        department: "Kitchen",
+        temporary_password: "",
+      });
+
+      alert("Department manager account created successfully.");
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Could not create manager account.");
+    } finally {
+      setBusy(false);
+    }
   }
-
-  setBusy(true);
-
-  try {
-    const { data, error } = await supabase.functions.invoke(
-      "department-manage",
-      {
-        body: {
-          action: "create_manager",
-          username: managerForm.username,
-          full_name: managerForm.full_name,
-          department: managerForm.department,
-          temporary_password: managerForm.temporary_password,
-        },
-      }
-    );
-
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-
-    setCreatedManager(data.manager);
-
-    setManagerForm({
-      username: "",
-      full_name: "",
-      department: "Kitchen",
-      temporary_password: "",
-    });
-
-    alert("Department manager account created successfully.");
-  } catch (err) {
-    onError(err instanceof Error ? err.message : "Could not create manager account.");
-  } finally {
-    setBusy(false);
-  }
-}
 
   async function refresh() {
     if (!session?.user || !profile?.active) return;
@@ -309,7 +311,8 @@ async function createDepartmentManager(e: React.FormEvent) {
       if (error) onError(error.message); else setStaff((data || []) as Profile[]);
     }
   }
-    async function loadDepartmentRequests() {
+
+  async function loadDepartmentRequests() {
     setLoadingDepartmentRequests(true);
 
     try {
@@ -328,15 +331,17 @@ async function createDepartmentManager(e: React.FormEvent) {
       setLoadingDepartmentRequests(false);
     }
   }
-useEffect(() => {
-  if (session?.user && profile?.active) {
-    refresh();
 
-    if (profile.role === "admin" || profile.role === "recruiter") {
-      loadDepartmentRequests();
+  useEffect(() => {
+    if (session?.user && profile?.active) {
+      refresh();
+
+      if (profile.role === "admin" || profile.role === "recruiter") {
+        loadDepartmentRequests();
+      }
     }
-  }
-}, [session?.user?.id, profile?.active, profile?.role]);
+  }, [session?.user?.id, profile?.active, profile?.role]);
+
   async function signIn(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); onError("");
     try {
@@ -346,6 +351,7 @@ useEffect(() => {
       setBusy(false);
     }
   }
+
   async function updatePassword(e: React.FormEvent) {
     e.preventDefault();
     onError("");
@@ -373,20 +379,27 @@ useEffect(() => {
       setBusy(false);
     }
   }
+
   async function changeStatus(id: string, status: ApplicationStatus) {
     const { error } = await supabase.functions.invoke("hr-manage", { body: { action: "set_status", application_id: id, status } });
     if (error) onError(error.message); else refresh();
   }
+
   async function getCv(path: string | null) {
     if (!path) return onError("No CV file is attached.");
     const { data, error } = await supabase.functions.invoke("hr-manage", { body: { action: "get_cv_url", path } });
     if (error || !data?.url) return onError(error?.message || data?.error || "Could not create CV link.");
     window.open(data.url, "_blank", "noopener,noreferrer");
   }
-  function saveApplicantPdf(applicant: ApplicationRow) {
-    const escapeHtml = (value: string | null | undefined) => String(value || "Not provided")
-      .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+function saveApplicantPdf(applicant: ApplicationRow) {
+    const escapeHtml = (value: string | null | undefined) => 
+      String(value || "Not provided")
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, String.fromCharCode(34))
+        .replace(/'/g, String.fromCharCode(39));
     const printWindow = window.open("", "_blank", "width=900,height=700");
     if (!printWindow) {
       onError("Please allow pop-ups for this site, then try Save as PDF again.");
@@ -431,28 +444,34 @@ useEffect(() => {
     if (error) onError(error.message); else { setShowJobForm(false); setJobForm({ title: "", title_am: "", department: "", location: "Adama, Ethiopia", employment_type: "Full-time", description: "", description_am: "", requirements: "", requirements_am: "", deadline: "" }); refresh(); }
     setBusy(false);
   }
+
   async function closeJob(id: string) {
     const { error } = await supabase.functions.invoke("hr-manage", { body: { action: "close_job", job_id: id } });
     if (error) onError(error.message); else refresh();
   }
+
   async function inviteStaff(e: React.FormEvent) {
     e.preventDefault(); setBusy(true);
     const { data, error } = await supabase.functions.invoke("hr-manage", { body: { action: "invite_staff", ...staffForm } });
     if (error || data?.error) onError(error?.message || data.error); else { setStaffForm({ email: "", full_name: "", role: "reviewer" }); refresh(); alert("Invitation sent if email delivery is configured."); }
     setBusy(false);
   }
+
   async function exportCsv() {
     const { data, error } = await supabase.functions.invoke("hr-manage", { body: { action: "export_csv" } });
     if (error || !data?.csv) return onError(error?.message || data?.error || "Export unavailable.");
     const blob = new Blob([data.csv], { type: "text/csv;charset=utf-8;" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "rift-valley-applications.csv"; a.click(); URL.revokeObjectURL(a.href);
   }
+
   if (!supabaseConfigured) return <div className="admin-shell"><button className="text-btn" onClick={onBack}>← {t.back}</button><div className="notice"><b>{t.config}</b><p>{t.configText}</p></div></div>;
   if (recoveryMode) return <div className="admin-shell"><button className="text-btn" onClick={onBack}>← {t.back}</button><div className="login-card"><div className="brand-mark large"><LockKeyhole/></div><div className="eyebrow green">{t.security}</div><h1>Set a new password</h1><p>Choose a new password for your HR account.</p><form onSubmit={updatePassword}><label>New password<input type="password" required minLength={8} value={newPassword} onChange={e => setNewPassword(e.target.value)} autoComplete="new-password"/></label><label>Confirm new password<input type="password" required minLength={8} value={confirmNewPassword} onChange={e => setConfirmNewPassword(e.target.value)} autoComplete="new-password"/></label><button className="primary-btn full-btn" disabled={busy}>{busy ? "Updating password…" : "Update password"}</button></form></div></div>;
   if (!session) return <div className="admin-shell"><button className="text-btn" onClick={onBack}>← {t.back}</button><div className="login-card"><div className="brand-mark large"><LockKeyhole/></div><div className="eyebrow green">{t.security}</div><h1>{t.login}</h1><p>Authorized Rift Valley Hotel HR staff only.</p><form onSubmit={signIn}><label>{t.email}<input type="email" required value={email} onChange={e => setEmail(e.target.value)} autoComplete="username"/></label><label>{t.password}<input type="password" required value={password} onChange={e => setPassword(e.target.value)} autoComplete="current-password"/></label><button className="primary-btn full-btn" disabled={busy}>{busy ? "Signing in…" : t.signIn}</button></form></div></div>;
   if (!profile) return <div className="admin-shell"><button className="text-btn" onClick={onBack}>← {t.back}</button><div className="notice"><b>Account not authorized</b><p>Your signed-in account has no active HR profile. Ask the system administrator to provision your account.</p><button className="outline-btn" onClick={() => supabase.auth.signOut()}>{t.logout}</button></div></div>;
   if (!profile.active) return <div className="admin-shell"><div className="notice"><b>Account disabled</b><p>Contact your HR administrator.</p><button className="outline-btn" onClick={() => supabase.auth.signOut()}>{t.logout}</button></div></div>;
+  
   const filtered = apps.filter(a => (filter === "all" || a.status === filter) && `${a.full_name} ${a.email} ${a.reference_code} ${a.jobs?.title || ""}`.toLowerCase().includes(search.toLowerCase()));
+  
   return <div className="admin-shell"><header className="admin-top"><a className="brand" href="#" onClick={e => { e.preventDefault(); onBack(); }}><span className="brand-mark"><Building2/></span><span><b>Rift Valley Hotel</b><small>HR WORKSPACE</small></span></a><div className="admin-user"><span className="avatar">{profile.full_name.slice(0,1).toUpperCase()}</span><span><b>{profile.full_name}</b><small>{profile.role}</small></span><button className="icon-btn" title={t.logout} onClick={() => supabase.auth.signOut()}><LogOut size={18}/></button></div></header>
     <div className="admin-body"><aside className="sidebar"><div className="side-label">WORKSPACE</div><button className={tab === "applications" ? "side-item active" : "side-item"} onClick={() => setTab("applications")}><Users size={18}/>{t.candidates}<span>{apps.length}</span></button><button className={tab === "jobs" ? "side-item active" : "side-item"} onClick={() => setTab("jobs")}><BriefcaseBusiness size={18}/>{t.jobs}</button>{canRecruit && (
   <button
@@ -521,7 +540,7 @@ useEffect(() => {
               <th>Positions</th>
               <th>Urgency</th>
               <th>Status</th>
-              <th>Date submitted</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -537,7 +556,11 @@ useEffect(() => {
                   </span>
                 </td>
                 <td>
-                  {new Date(request.created_at).toLocaleDateString()}
+                  <div className="row-actions">
+                    <button className="outline-btn mini" onClick={() => setActiveChatRequest(request)}>
+                      <MessageSquare size={14} /> Chat
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -546,7 +569,9 @@ useEffect(() => {
       </div>
     )}
   </div>
-)} {tab === "staff" && isAdmin && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.staff}</h2><p>Invite staff and assign the minimum permissions they need.</p></div></div><form className="staff-form" onSubmit={inviteStaff}><label>{t.staffName}<input required value={staffForm.full_name} onChange={e => setStaffForm({...staffForm,full_name:e.target.value})}/></label><label>{t.staffEmail}<input required type="email" value={staffForm.email} onChange={e => setStaffForm({...staffForm,email:e.target.value})}/></label><label>{t.role}<select value={staffForm.role} onChange={e => setStaffForm({...staffForm,role:e.target.value as Role})}><option value="reviewer">{t.roleReviewer}</option><option value="recruiter">{t.roleRecruiter}</option><option value="admin">{t.roleAdmin}</option></select></label><button className="primary-btn" disabled={busy}>{t.createStaff}</button></form><div className="job-admin-list">{staff.map(s => <div className="job-admin-row" key={s.id}><div><b>{s.full_name}</b><small>{s.id}</small></div><span className="status status-new">{s.role}</span><span className={s.active ? "active-label" : "inactive-label"}>{s.active ? "Active" : "Disabled"}</span></div>)}</div><p className="muted">{t.adminOnly}</p></div>}
+)} 
+
+{tab === "staff" && isAdmin && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.staff}</h2><p>Invite staff and assign the minimum permissions they need.</p></div></div><form className="staff-form" onSubmit={inviteStaff}><label>{t.staffName}<input required value={staffForm.full_name} onChange={e => setStaffForm({...staffForm,full_name:e.target.value})}/></label><label>{t.staffEmail}<input required type="email" value={staffForm.email} onChange={e => setStaffForm({...staffForm,email:e.target.value})}/></label><label>{t.role}<select value={staffForm.role} onChange={e => setStaffForm({...staffForm,role:e.target.value as Role})}><option value="reviewer">{t.roleReviewer}</option><option value="recruiter">{t.roleRecruiter}</option><option value="admin">{t.roleAdmin}</option></select></label><button className="primary-btn" disabled={busy}>{t.createStaff}</button></form><div className="job-admin-list">{staff.map(s => <div className="job-admin-row" key={s.id}><div><b>{s.full_name}</b><small>{s.id}</small></div><span className="status status-new">{s.role}</span><span className={s.active ? "active-label" : "inactive-label"}>{s.active ? "Active" : "Disabled"}</span></div>)}</div><p className="muted">{t.adminOnly}</p></div>}
     
 {tab === "departments" && isAdmin && (
   <div className="table-panel">
@@ -637,6 +662,18 @@ useEffect(() => {
 )}
 
     </section></div>
+    
+    {activeChatRequest && session?.user && profile && (
+      <RequestChatModal
+        requestId={activeChatRequest.id}
+        requestTitle={activeChatRequest.job_title}
+        currentUserId={session.user.id}
+        currentUserName={profile.full_name}
+        currentUserRole={`HR (${profile.role})`}
+        onClose={() => setActiveChatRequest(null)}
+      />
+    )}
+
     <footer className="admin-footer">Rift Valley Hotel · Recruitment data is confidential.</footer></div>;
 }
 export default App;

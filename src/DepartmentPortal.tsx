@@ -1,6 +1,6 @@
-
 import { useState } from "react";
 import { supabase } from "./lib/supabase";
+import RequestChatModal from "./components/RequestChatModal";
 import {
   Building2,
   LogOut,
@@ -9,6 +9,7 @@ import {
   ClipboardList,
   RefreshCw,
   Edit3,
+  MessageSquare,
 } from "lucide-react";
 
 type Manager = {
@@ -67,6 +68,7 @@ export default function DepartmentPortal() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [activeChatRequest, setActiveChatRequest] = useState<VacancyRequest | null>(null);
 
   async function callFunction(body: Record<string, unknown>) {
     const { data, error } = await supabase.functions.invoke(
@@ -547,14 +549,22 @@ export default function DepartmentPortal() {
                     </div>
                   )}
 
-                  {["pending", "correction_requested"].includes(request.status) && (
+                  <div style={{ display: "flex", gap: "10px", marginTop: "12px", flexWrap: "wrap" }}>
+                    {["pending", "correction_requested"].includes(request.status) && (
+                      <button
+                        className="department-outline"
+                        onClick={() => editRequest(request)}
+                      >
+                        <Edit3 size={15} /> {request.status === "pending" ? "Edit request" : "Correct and resubmit"}
+                      </button>
+                    )}
                     <button
                       className="department-outline"
-                      onClick={() => editRequest(request)}
+                      onClick={() => setActiveChatRequest(request)}
                     >
-                      <Edit3 size={15} /> {request.status === "pending" ? "Edit request" : "Correct and resubmit"}
+                      <MessageSquare size={15} /> Chat with HR
                     </button>
-                  )}
+                  </div>
                 </article>
               ))
             )}
@@ -565,6 +575,17 @@ export default function DepartmentPortal() {
           Your account can only manage requests belonging to {manager.department}.
         </p>
       </section>
+
+      {activeChatRequest && manager && (
+        <RequestChatModal
+          requestId={activeChatRequest.id}
+          requestTitle={activeChatRequest.job_title}
+          currentUserId={manager.id}
+          currentUserName={manager.full_name}
+          currentUserRole={`${manager.department} Manager`}
+          onClose={() => setActiveChatRequest(null)}
+        />
+      )}
     </main>
   );
 }
