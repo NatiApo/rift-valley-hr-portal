@@ -14,6 +14,22 @@ type ApplicationRow = {
   status: ApplicationStatus; created_at: string; job_id: string; cv_path: string | null;
   jobs?: { title: string } | null;
 };
+type DepartmentRequest = {
+  id: string;
+  department: string;
+  job_title: string;
+  number_of_positions: number;
+  employment_type: string | null;
+  location: string | null;
+  job_description: string | null;
+  requirements: string | null;
+  reason: string | null;
+  proposed_deadline: string | null;
+  urgency: "normal" | "urgent" | "critical";
+  status: string;
+  hr_feedback: string | null;
+  created_at: string;
+};
 
 const copy = {
   en: {
@@ -120,9 +136,7 @@ function App() {
  if (window.location.pathname === "/department") {
   return <DepartmentPortal />;
 }
-if (window.location.pathname === "/department") {
-  return <DepartmentPortal />;
-}
+
   if (adminOpen) return <Admin onBack={() => { setAdminOpen(false); setError(""); setRecoveryMode(false); }} session={session} profile={profile} onError={setError} lang={lang} recoveryMode={recoveryMode} onRecoveryComplete={() => setRecoveryMode(false)} />;
   return <div className="app-shell">
     <header className="topbar"><a className="brand" href="#" onClick={e => { e.preventDefault(); setSelectedJob(null); }}><img
@@ -210,8 +224,9 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmNewPassword, setConfirmNewPassword] = useState("");
-  const [tab, setTab] = useState<"applications" | "jobs" | "staff" | "departments">("applications"); const [apps, setApps] = useState<ApplicationRow[]>([]);
+ const [tab, setTab] = useState<"applications" | "jobs" | "staff" | "department" | "departments">("applications");
   const [selectedApplicant, setSelectedApplicant] = useState<ApplicationRow | null>(null);
+  const [apps, setApps] = useState<ApplicationRow[]>([]);
   const [jobs, setJobs] = useState<Job[]>([]);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -229,6 +244,8 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
 
 const [createdManager, setCreatedManager] = useState<any>(null);
   const [staff, setStaff] = useState<Profile[]>([]);
+  const [departmentRequests, setDepartmentRequests] = useState<DepartmentRequest[]>([]);
+const [loadingDepartmentRequests, setLoadingDepartmentRequests] = useState(false);
   const canRecruit = profile?.active && (profile.role === "admin" || profile.role === "recruiter");
   const isAdmin = profile?.active && profile.role === "admin";
 
@@ -292,7 +309,34 @@ async function createDepartmentManager(e: React.FormEvent) {
       if (error) onError(error.message); else setStaff((data || []) as Profile[]);
     }
   }
-  useEffect(() => { if (session?.user && profile?.active) refresh(); }, [session?.user?.id, profile?.active, profile?.role]);
+    async function loadDepartmentRequests() {
+    setLoadingDepartmentRequests(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke(
+        "department-manage",
+        { body: { action: "hr_list_department_requests" } }
+      );
+
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+
+      setDepartmentRequests(data?.requests || []);
+    } catch (err: any) {
+      onError(err.message || "Could not load department requests.");
+    } finally {
+      setLoadingDepartmentRequests(false);
+    }
+  }
+useEffect(() => {
+  if (session?.user && profile?.active) {
+    refresh();
+
+    if (profile.role === "admin" || profile.role === "recruiter") {
+      loadDepartmentRequests();
+    }
+  }
+}, [session?.user?.id, profile?.active, profile?.role]);
   async function signIn(e: React.FormEvent) {
     e.preventDefault(); setBusy(true); onError("");
     try {
@@ -410,7 +454,16 @@ async function createDepartmentManager(e: React.FormEvent) {
   if (!profile.active) return <div className="admin-shell"><div className="notice"><b>Account disabled</b><p>Contact your HR administrator.</p><button className="outline-btn" onClick={() => supabase.auth.signOut()}>{t.logout}</button></div></div>;
   const filtered = apps.filter(a => (filter === "all" || a.status === filter) && `${a.full_name} ${a.email} ${a.reference_code} ${a.jobs?.title || ""}`.toLowerCase().includes(search.toLowerCase()));
   return <div className="admin-shell"><header className="admin-top"><a className="brand" href="#" onClick={e => { e.preventDefault(); onBack(); }}><span className="brand-mark"><Building2/></span><span><b>Rift Valley Hotel</b><small>HR WORKSPACE</small></span></a><div className="admin-user"><span className="avatar">{profile.full_name.slice(0,1).toUpperCase()}</span><span><b>{profile.full_name}</b><small>{profile.role}</small></span><button className="icon-btn" title={t.logout} onClick={() => supabase.auth.signOut()}><LogOut size={18}/></button></div></header>
-    <div className="admin-body"><aside className="sidebar"><div className="side-label">WORKSPACE</div><button className={tab === "applications" ? "side-item active" : "side-item"} onClick={() => setTab("applications")}><Users size={18}/>{t.candidates}<span>{apps.length}</span></button><button className={tab === "jobs" ? "side-item active" : "side-item"} onClick={() => setTab("jobs")}><BriefcaseBusiness size={18}/>{t.jobs}</button>{isAdmin && <button className={tab === "staff" ? "side-item active" : "side-item"} onClick={() => setTab("staff")}><ShieldCheck size={18}/>{t.staff}</button>}{isAdmin && (
+    <div className="admin-body"><aside className="sidebar"><div className="side-label">WORKSPACE</div><button className={tab === "applications" ? "side-item active" : "side-item"} onClick={() => setTab("applications")}><Users size={18}/>{t.candidates}<span>{apps.length}</span></button><button className={tab === "jobs" ? "side-item active" : "side-item"} onClick={() => setTab("jobs")}><BriefcaseBusiness size={18}/>{t.jobs}</button>{canRecruit && (
+  <button
+    className={tab === "department" ? "side-item active" : "side-item"}
+    onClick={() => setTab("department")}
+  >
+    <Building2 size={18} />
+    Department Requests
+    <span>{departmentRequests.length}</span>
+  </button>
+)}{isAdmin && <button className={tab === "staff" ? "side-item active" : "side-item"} onClick={() => setTab("staff")}><ShieldCheck size={18}/>{t.staff}</button>}{isAdmin && (
   <button
     className={tab === "departments" ? "side-item active" : "side-item"}
     onClick={() => setTab("departments")}
@@ -437,7 +490,63 @@ async function createDepartmentManager(e: React.FormEvent) {
         </div>
       </div></div>}
       {tab === "jobs" && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.jobs}</h2><p>Create, publish, or close recruitment opportunities.</p></div>{canRecruit && <button className="primary-btn" onClick={() => setShowJobForm(!showJobForm)}>{t.addJob}</button>}</div>{showJobForm && <form className="job-editor" onSubmit={saveJob}><div className="form-grid"><label>{t.title} <input required value={jobForm.title} onChange={e => setJobForm({...jobForm,title:e.target.value})}/></label><label>የሥራ ርዕስ (Amharic)<input value={jobForm.title_am} onChange={e => setJobForm({...jobForm,title_am:e.target.value})}/></label><label>{t.dept}<input value={jobForm.department} onChange={e => setJobForm({...jobForm,department:e.target.value})}/></label><label>{t.location}<input required value={jobForm.location} onChange={e => setJobForm({...jobForm,location:e.target.value})}/></label><label>{t.type}<select value={jobForm.employment_type} onChange={e => setJobForm({...jobForm,employment_type:e.target.value})}><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Temporary</option><option>Internship</option></select></label><label>{t.deadline}<input type="date" value={jobForm.deadline} onChange={e => setJobForm({...jobForm,deadline:e.target.value})}/></label><label className="full">{t.description} <textarea required rows={4} value={jobForm.description} onChange={e => setJobForm({...jobForm,description:e.target.value})}/></label><label className="full">የሥራ መግለጫ (Amharic)<textarea rows={3} value={jobForm.description_am} onChange={e => setJobForm({...jobForm,description_am:e.target.value})}/></label><label className="full">{t.requirements}<textarea rows={3} value={jobForm.requirements} onChange={e => setJobForm({...jobForm,requirements:e.target.value})}/></label><label className="full">መስፈርቶች (Amharic)<textarea rows={3} value={jobForm.requirements_am} onChange={e => setJobForm({...jobForm,requirements_am:e.target.value})}/></label></div><div className="form-actions"><button type="button" className="outline-btn" onClick={() => setShowJobForm(false)}>{t.cancel}</button><button disabled={busy} className="primary-btn">{busy ? "Saving…" : t.publish}</button></div></form>}<div className="job-admin-list">{jobs.map(j => <div className="job-admin-row" key={j.id}><div><b>{j.title}</b><small>{j.department || "General"} · {j.location}</small></div><span className={`status ${j.status === "published" ? "status-hired" : "status-new"}`}>{j.status}</span>{canRecruit && j.status !== "closed" && <button className="outline-btn mini" onClick={() => closeJob(j.id)}>{t.closeJob}</button>}</div>)}</div></div>}
-      {tab === "staff" && isAdmin && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.staff}</h2><p>Invite staff and assign the minimum permissions they need.</p></div></div><form className="staff-form" onSubmit={inviteStaff}><label>{t.staffName}<input required value={staffForm.full_name} onChange={e => setStaffForm({...staffForm,full_name:e.target.value})}/></label><label>{t.staffEmail}<input required type="email" value={staffForm.email} onChange={e => setStaffForm({...staffForm,email:e.target.value})}/></label><label>{t.role}<select value={staffForm.role} onChange={e => setStaffForm({...staffForm,role:e.target.value as Role})}><option value="reviewer">{t.roleReviewer}</option><option value="recruiter">{t.roleRecruiter}</option><option value="admin">{t.roleAdmin}</option></select></label><button className="primary-btn" disabled={busy}>{t.createStaff}</button></form><div className="job-admin-list">{staff.map(s => <div className="job-admin-row" key={s.id}><div><b>{s.full_name}</b><small>{s.id}</small></div><span className="status status-new">{s.role}</span><span className={s.active ? "active-label" : "inactive-label"}>{s.active ? "Active" : "Disabled"}</span></div>)}</div><p className="muted">{t.adminOnly}</p></div>}
+     
+    {tab === "department" && canRecruit && (
+  <div className="table-panel">
+    <div className="table-toolbar">
+      <div>
+        <h2>Department Vacancy Requests</h2>
+        <p>Review vacancy requests submitted by department managers.</p>
+      </div>
+      <button
+        className="outline-btn"
+        onClick={loadDepartmentRequests}
+        disabled={loadingDepartmentRequests}
+      >
+        {loadingDepartmentRequests ? "Loading..." : "Refresh"}
+      </button>
+    </div>
+
+    {loadingDepartmentRequests ? (
+      <div className="empty">Loading department requests...</div>
+    ) : departmentRequests.length === 0 ? (
+      <div className="empty">No department requests found.</div>
+    ) : (
+      <div className="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Job title</th>
+              <th>Department</th>
+              <th>Positions</th>
+              <th>Urgency</th>
+              <th>Status</th>
+              <th>Date submitted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {departmentRequests.map((request) => (
+              <tr key={request.id}>
+                <td><b>{request.job_title}</b></td>
+                <td>{request.department}</td>
+                <td>{request.number_of_positions}</td>
+                <td>{request.urgency || "Normal"}</td>
+                <td>
+                  <span className="status status-new">
+                   {request.status.replace(/_/g, " ")}
+                  </span>
+                </td>
+                <td>
+                  {new Date(request.created_at).toLocaleDateString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )}
+  </div>
+)} {tab === "staff" && isAdmin && <div className="table-panel"><div className="table-toolbar"><div><h2>{t.staff}</h2><p>Invite staff and assign the minimum permissions they need.</p></div></div><form className="staff-form" onSubmit={inviteStaff}><label>{t.staffName}<input required value={staffForm.full_name} onChange={e => setStaffForm({...staffForm,full_name:e.target.value})}/></label><label>{t.staffEmail}<input required type="email" value={staffForm.email} onChange={e => setStaffForm({...staffForm,email:e.target.value})}/></label><label>{t.role}<select value={staffForm.role} onChange={e => setStaffForm({...staffForm,role:e.target.value as Role})}><option value="reviewer">{t.roleReviewer}</option><option value="recruiter">{t.roleRecruiter}</option><option value="admin">{t.roleAdmin}</option></select></label><button className="primary-btn" disabled={busy}>{t.createStaff}</button></form><div className="job-admin-list">{staff.map(s => <div className="job-admin-row" key={s.id}><div><b>{s.full_name}</b><small>{s.id}</small></div><span className="status status-new">{s.role}</span><span className={s.active ? "active-label" : "inactive-label"}>{s.active ? "Active" : "Disabled"}</span></div>)}</div><p className="muted">{t.adminOnly}</p></div>}
     
 {tab === "departments" && isAdmin && (
   <div className="table-panel">

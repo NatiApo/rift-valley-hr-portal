@@ -30,7 +30,8 @@ function reply(data: unknown, status = 200) {
   });
 }
 
-async function getActiveHrAdmin(req: Request) {
+
+async function getActiveHrStaff(req: Request) {
   const authorization = req.headers.get("Authorization");
 
   if (!authorization?.startsWith("Bearer ")) {
@@ -57,13 +58,17 @@ async function getActiveHrAdmin(req: Request) {
     profileError ||
     !profile ||
     profile.active !== true ||
-    profile.role !== "admin"
+    !["admin", "recruiter"].includes(profile.role)
   ) {
     return null;
   }
 
-  return userData.user;
+  return {
+    ...userData.user,
+    role: profile.role,
+  };
 }
+
 
 async function getActiveDepartmentManager(req: Request) {
   const authorization = req.headers.get("Authorization");
@@ -530,11 +535,32 @@ Deno.serve(async (req: Request) => {
     }
 
     // All remaining actions require an active HR Admin.
-    const hrAdmin = await getActiveHrAdmin(req);
+   
+const hrStaff = await getActiveHrStaff(req);
 
-    if (!hrAdmin) {
-      return reply({ error: "HR Admin access required." }, 403);
-    }
+if (!hrStaff) {
+  return reply(
+    { error: "Active HR Admin or Recruiter access required." },
+    403,
+  );
+}
+
+const adminOnlyActions = [
+  "hr_list_department_managers",
+  "hr_set_department_manager_active",
+  "hr_reset_department_manager_password",
+  "create_manager",
+];
+
+if (
+  adminOnlyActions.includes(String(body.action)) &&
+  hrStaff.role !== "admin"
+) {
+  return reply(
+    { error: "HR Admin access required for manager account actions." },
+    403,
+  );
+}
 
     // HR Admin views all department vacancy requests.
     if (body.action === "hr_list_department_requests") {
@@ -611,7 +637,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: decision,
           hr_feedback: feedback || null,
-          reviewed_by: hrAdmin.id,
+          reviewed_by: hrStaff.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", requestId)
@@ -679,7 +705,7 @@ Deno.serve(async (req: Request) => {
           requirements: request.requirements,
           deadline: request.proposed_deadline,
           status: "published",
-          created_by: hrAdmin.id,
+         created_by: hrStaff.id,
         })
         .select("id, title, department, status")
         .single();
@@ -696,7 +722,7 @@ Deno.serve(async (req: Request) => {
         .update({
           status: "published",
           published_job_id: job.id,
-          reviewed_by: hrAdmin.id,
+          reviewed_by: hrStaff.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", requestId)
@@ -921,7 +947,7 @@ Deno.serve(async (req: Request) => {
           department,
           active: true,
           must_change_password: true,
-          created_by: hrAdmin.id,
+        created_by: hrStaff.id,
         });
 
       if (profileInsertError) {
