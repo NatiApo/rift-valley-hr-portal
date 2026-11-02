@@ -30,45 +30,27 @@ function reply(data: unknown, status = 200) {
   });
 }
 
-
 async function getActiveHrStaff(req: Request) {
   const authorization = req.headers.get("Authorization");
-
-  if (!authorization?.startsWith("Bearer ")) {
-    return null;
-  }
-
+  if (!authorization?.startsWith("Bearer ")) return null;
   const token = authorization.slice(7);
-
-  const { data: userData, error: userError } =
-    await adminClient.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return null;
-  }
-
-  const { data: profile, error: profileError } =
-    await adminClient
-      .from("staff_profiles")
-      .select("id, role, active")
-      .eq("id", userData.user.id)
-      .maybeSingle();
-
-  if (
-    profileError ||
-    !profile ||
-    profile.active !== true ||
-    !["admin", "recruiter"].includes(profile.role)
-  ) {
-    return null;
-  }
-
-  return {
-    ...userData.user,
-    role: profile.role,
-  };
+  const { data: userData, error: userError } = await adminClient.auth.getUser(token);
+  if (userError || !userData.user) return null;
+  const { data: profile, error: profileError } = await adminClient
+    .from("staff_profiles")
+    .select("id, role, active")
+    .eq("id", userData.user.id)
+    .maybeSingle();
+  if (profileError || !profile || profile.active !== true || !["admin", "recruiter"].includes(profile.role)) return null;
+  return { user: userData.user, role: profile.role };
 }
 
+async function getAuthenticatedUser(req: Request) {
+  const authorization = req.headers.get("Authorization");
+  if (!authorization?.startsWith("Bearer ")) return null;
+  const { data, error } = await adminClient.auth.getUser(authorization.slice(7));
+  return error || !data.user ? null : data.user;
+}
 
 async function getActiveDepartmentManager(req: Request) {
   const authorization = req.headers.get("Authorization");
@@ -534,33 +516,77 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // All remaining actions require an active HR Admin.
-   
-const hrStaff = await getActiveHrStaff(req);
+    // Request chat: only the request-owning active manager or active HR Admin/Recruiter may participate.
+    if (body.action === "get_chat_messages" || body.action === "send_chat_message") {
+      const requestId = String(body.request_id ?? "");
+      if (!/^[0-9a-f-]{36}$/i.test(requestId)) return reply({ error: "Invalid request ID." }, 400);
+      const user = await getAuthenticatedUser(req);
+      if (!user) return reply({ error: "Authentication required." }, 401);
 
-if (!hrStaff) {
-  return reply(
-    { error: "Active HR Admin or Recruiter access required." },
-    403,
-  );
-}
+      const { data: request, error: requestError } = await adminClient
+        .from("department_vacancy_requests")
+        .select("id, submitted_by, department")
+        .eq("id", requestId)
+        .maybeSingle();
+      if (requestError || !request) return reply({ error: "Request not found." }, 404);
 
-const adminOnlyActions = [
-  "hr_list_department_managers",
-  "hr_set_department_manager_active",
-  "hr_reset_department_manager_password",
-  "create_manager",
-];
+      let senderName = "";
+      let senderRole = "";
+      let authorized = false;
+      const { data: managerProfile } = await adminClient
+        .from("department_profiles")
+        .select("id, full_name, active, must_change_password")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (managerProfile?.active === true && managerProfile.must_change_password === false && request.submitted_by === user.id) {
+        authorized = true;
+        senderName = managerProfile.full_name;
+        senderRole = "Manager";
+      } else {
+        const { data: hrProfile } = await adminClient
+          .from("staff_profiles")
+          .select("id, role, active, full_name")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (hrProfile?.active === true && ["admin", "recruiter"].includes(hrProfile.role)) {
+          authorized = true;
+          senderName = hrProfile.full_name || user.email || "HR Staff";
+          senderRole = hrProfile.role === "admin" ? "HR Admin" : "Recruiter";
+        }
+      }
+      if (!authorized) return reply({ error: "You are not allowed to access this conversation." }, 403);
 
-if (
-  adminOnlyActions.includes(String(body.action)) &&
-  hrStaff.role !== "admin"
-) {
-  return reply(
-    { error: "HR Admin access required for manager account actions." },
-    403,
-  );
-}
+      if (body.action === "get_chat_messages") {
+        const { data, error } = await adminClient
+          .from("department_request_messages")
+          .select("*")
+          .eq("request_id", requestId)
+          .order("created_at", { ascending: true });
+        if (error) return reply({ error: "Could not load chat messages. Check that the chat table is installed." }, 500);
+        return reply({ success: true, messages: data ?? [] });
+      }
+
+      const message = String(body.message ?? "").trim();
+      if (!message || message.length > 5000) return reply({ error: "Message must contain 1–5,000 characters." }, 400);
+      const { data, error } = await adminClient
+        .from("department_request_messages")
+        .insert({ request_id: requestId, sender_id: user.id, sender_name: senderName, sender_role: senderRole, message })
+        .select()
+        .single();
+      if (error) return reply({ error: "Could not send message. Check that the chat table is installed and its columns match." }, 500);
+      return reply({ success: true, message: data });
+    }
+
+    // HR actions require an active HR Admin or Recruiter.
+    const hrStaff = await getActiveHrStaff(req);
+    if (!hrStaff) return reply({ error: "Active HR Admin or Recruiter access required." }, 403);
+    const hrUser = hrStaff.user;
+
+    // Only HR Admins may manage department manager accounts.
+    const adminOnlyActions = ["hr_list_department_managers", "hr_set_department_manager_active", "hr_reset_department_manager_password", "create_manager"];
+    if (adminOnlyActions.includes(String(body.action)) && hrStaff.role !== "admin") {
+      return reply({ error: "HR Admin access required for manager account actions." }, 403);
+    }
 
     // HR Admin views all department vacancy requests.
     if (body.action === "hr_list_department_requests") {
@@ -637,7 +663,7 @@ if (
         .update({
           status: decision,
           hr_feedback: feedback || null,
-          reviewed_by: hrStaff.id,
+          reviewed_by: hrUser.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", requestId)
@@ -705,7 +731,7 @@ if (
           requirements: request.requirements,
           deadline: request.proposed_deadline,
           status: "published",
-         created_by: hrStaff.id,
+          created_by: hrUser.id,
         })
         .select("id, title, department, status")
         .single();
@@ -722,7 +748,7 @@ if (
         .update({
           status: "published",
           published_job_id: job.id,
-          reviewed_by: hrStaff.id,
+          reviewed_by: hrUser.id,
           reviewed_at: new Date().toISOString(),
         })
         .eq("id", requestId)
@@ -947,7 +973,7 @@ if (
           department,
           active: true,
           must_change_password: true,
-        created_by: hrStaff.id,
+          created_by: hrUser.id,
         });
 
       if (profileInsertError) {

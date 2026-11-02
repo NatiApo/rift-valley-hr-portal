@@ -243,6 +243,18 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
   });
 
   const [createdManager, setCreatedManager] = useState<any>(null);
+  type DepartmentManager = {
+  id: string;
+  username: string;
+  full_name: string;
+  department: string;
+  active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+};
+
+const [departmentManagers, setDepartmentManagers] = useState<DepartmentManager[]>([]);
+const [loadingManagers, setLoadingManagers] = useState(false);
   const [staff, setStaff] = useState<Profile[]>([]);
   const [departmentRequests, setDepartmentRequests] = useState<DepartmentRequest[]>([]);
   const [loadingDepartmentRequests, setLoadingDepartmentRequests] = useState(false);
@@ -351,7 +363,73 @@ function Admin({ onBack, session, profile, onError, lang, recoveryMode, onRecove
       setBusy(false);
     }
   }
+async function loadDepartmentManagers() {
+  if (!isAdmin) return;
 
+  setLoadingManagers(true);
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "department-manage",
+      {
+        body: {
+          action: "hr_list_department_managers",
+        },
+      }
+    );
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    setDepartmentManagers(data?.managers || []);
+  } catch (err: any) {
+    onError(err.message || "Could not load department managers.");
+  } finally {
+    setLoadingManagers(false);
+  }
+}
+async function resetDepartmentManagerPassword(manager: DepartmentManager) {
+  const temporaryPassword = window.prompt(
+    `Enter a new temporary password for ${manager.username} (at least 12 characters):`
+  );
+
+  if (temporaryPassword === null) return;
+
+  if (temporaryPassword.length < 12 || temporaryPassword.length > 128) {
+    window.alert("Password must be between 12 and 128 characters.");
+    return;
+  }
+
+  const confirmed = window.confirm(
+    `Reset the password for ${manager.full_name}?`
+  );
+
+  if (!confirmed) return;
+
+  try {
+    const { data, error } = await supabase.functions.invoke(
+      "department-manage",
+      {
+        body: {
+          action: "hr_reset_department_manager_password",
+          manager_id: manager.id,
+          temporary_password: temporaryPassword,
+        },
+      }
+    );
+
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+
+    window.alert(
+      `Password reset successfully for ${manager.username}. Give the temporary password to the manager securely.`
+    );
+
+    await loadDepartmentManagers();
+  } catch (err: any) {
+    onError(err.message || "Could not reset the manager password.");
+  }
+}
   async function updatePassword(e: React.FormEvent) {
     e.preventDefault();
     onError("");
@@ -476,7 +554,10 @@ function saveApplicantPdf(applicant: ApplicationRow) {
     <div className="admin-body"><aside className="sidebar"><div className="side-label">WORKSPACE</div><button className={tab === "applications" ? "side-item active" : "side-item"} onClick={() => setTab("applications")}><Users size={18}/>{t.candidates}<span>{apps.length}</span></button><button className={tab === "jobs" ? "side-item active" : "side-item"} onClick={() => setTab("jobs")}><BriefcaseBusiness size={18}/>{t.jobs}</button>{canRecruit && (
   <button
     className={tab === "department" ? "side-item active" : "side-item"}
-    onClick={() => setTab("department")}
+   onClick={() => {
+  setTab("departments");
+  loadDepartmentManagers();
+}}
   >
     <Building2 size={18} />
     Department Requests
@@ -658,7 +739,70 @@ function saveApplicantPdf(applicant: ApplicationRow) {
         <p>The manager must change their password at first login.</p>
       </div>
     )}
+    <div className="table-toolbar" style={{ marginTop: "30px" }}>
+  <div>
+    <h2>Department Manager Accounts</h2>
+    <p>View managers and reset their passwords when needed.</p>
   </div>
+
+  <button
+    type="button"
+    className="secondary-btn"
+    onClick={loadDepartmentManagers}
+    disabled={loadingManagers}
+  >
+    {loadingManagers ? "Loading..." : "Refresh managers"}
+  </button>
+</div>
+
+{loadingManagers ? (
+  <p>Loading department managers...</p>
+) : departmentManagers.length === 0 ? (
+  <p>No department managers found.</p>
+) : (
+  <div className="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Department</th>
+          <th>Username</th>
+          <th>Account status</th>
+          <th>Password status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {departmentManagers.map((manager) => (
+          <tr key={manager.id}>
+            <td>{manager.full_name}</td>
+            <td>{manager.department}</td>
+            <td>{manager.username}</td>
+            <td>{manager.active ? "Active" : "Disabled"}</td>
+            <td>
+              {manager.must_change_password
+                ? "Must change password"
+                : "Password set"}
+            </td>
+            <td>
+              <button
+                type="button"
+                className="secondary-btn"
+                disabled={!manager.active}
+                onClick={() => resetDepartmentManagerPassword(manager)}
+              >
+                Reset password
+              </button>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+)}
+  </div>
+
 )}
 
     </section></div>
