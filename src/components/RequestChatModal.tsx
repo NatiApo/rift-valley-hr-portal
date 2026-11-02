@@ -36,8 +36,12 @@ export default function RequestChatModal({
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   async function loadMessages() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData?.session?.access_token;
+
     const { data, error } = await supabase.functions.invoke("department-manage", {
       body: { action: "get_chat_messages", request_id: requestId },
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!error && data?.messages) {
       setMessages(data.messages);
@@ -107,12 +111,16 @@ export default function RequestChatModal({
     setBusy(true);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+
       const { data, error } = await supabase.functions.invoke("department-manage", {
         body: {
           action: "send_chat_message",
           request_id: requestId,
           message: content,
         },
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       });
 
       if (error || data?.error) {
