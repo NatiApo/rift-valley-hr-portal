@@ -552,17 +552,17 @@ function saveApplicantPdf(applicant: ApplicationRow) {
   
   return <div className="admin-shell"><header className="admin-top"><a className="brand" href="#" onClick={e => { e.preventDefault(); onBack(); }}><span className="brand-mark"><Building2/></span><span><b>Rift Valley Hotel</b><small>HR WORKSPACE</small></span></a><div className="admin-user"><span className="avatar">{profile.full_name.slice(0,1).toUpperCase()}</span><span><b>{profile.full_name}</b><small>{profile.role}</small></span><button className="icon-btn" title={t.logout} onClick={() => supabase.auth.signOut()}><LogOut size={18}/></button></div></header>
     <div className="admin-body"><aside className="sidebar"><div className="side-label">WORKSPACE</div><button className={tab === "applications" ? "side-item active" : "side-item"} onClick={() => setTab("applications")}><Users size={18}/>{t.candidates}<span>{apps.length}</span></button><button className={tab === "jobs" ? "side-item active" : "side-item"} onClick={() => setTab("jobs")}><BriefcaseBusiness size={18}/>{t.jobs}</button>{canRecruit && (
-  <button
-    className={tab === "department" ? "side-item active" : "side-item"}
-   onClick={() => {
-  setTab("departments");
-  loadDepartmentManagers();
-}}
-  >
-    <Building2 size={18} />
-    Department Requests
-    <span>{departmentRequests.length}</span>
-  </button>
+ <button
+  className={tab === "department" ? "side-item active" : "side-item"}
+  onClick={() => {
+    setTab("department");
+    loadDepartmentRequests();
+  }}
+>
+  <Building2 size={18} />
+  Department Requests
+  <span>{departmentRequests.length}</span>
+</button>
 )}{isAdmin && <button className={tab === "staff" ? "side-item active" : "side-item"} onClick={() => setTab("staff")}><ShieldCheck size={18}/>{t.staff}</button>}{isAdmin && (
   <button
     className={tab === "departments" ? "side-item active" : "side-item"}
