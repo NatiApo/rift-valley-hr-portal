@@ -72,25 +72,27 @@ export default function RequestChatModal({
       .subscribe();
 
     // 2. Real-time online presence indicator
-    const presenceChannel = supabase.channel(`presence_${requestId}`, {
-      config: { presence: { key: currentUserId } },
-    });
+   // 2. Real-time online presence indicator
+const presenceChannel = supabase.channel(`presence_${requestId}`, {
+  config: { presence: { key: currentUserId } },
+});
 
-    presenceChannel.subscribe(async (status) => {
-      if (status === "SUBSCRIBED") {
-        await presenceChannel.track({
-          user: currentUserName,
-          role: currentUserRole,
-          online_at: new Date().toISOString(),
-        });
-      }
-    });
+// Register the presence listener BEFORE subscribing
+presenceChannel.on("presence", { event: "sync" }, () => {
+  const state = presenceChannel.presenceState();
+  const activeUsers = Object.keys(state);
+  setOnlineStatus(`${activeUsers.length} participant(s) online in channel`);
+});
 
-    presenceChannel.on("presence", { event: "sync" }, () => {
-      const state = presenceChannel.presenceState();
-      const activeUsers = Object.keys(state);
-      setOnlineStatus(`${activeUsers.length} participant(s) online in channel`);
+presenceChannel.subscribe(async (status) => {
+  if (status === "SUBSCRIBED") {
+    await presenceChannel.track({
+      user: currentUserName,
+      role: currentUserRole,
+      online_at: new Date().toISOString(),
     });
+  }
+});
 
     return () => {
       supabase.removeChannel(chatChannel);
